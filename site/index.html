@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FiveMエモート太郎</title>
+<meta name="description" content="街で見つけたエモートを Stream Deck のボタンにする道具。使い方の手順つき。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* ── tokens ───────────────────────────────────────────────
+   Light is the complete set. Dark redefines only these, twice:
+   once for the un-stamped system-dark case, once for an explicit
+   toggle. Nothing below this block hard-codes a colour. */
+:root{
+  --bg:#F1F3F7;
+  --surface:#FFFFFF;
+  --surface-2:#E7EAF1;
+  --ink:#191C24;
+  --ink-2:#565D70;
+  --line:#D3D8E3;
+  --amber:#C87A16;
+  --amber-soft:#F6E3C4;
+  --key:#FFFFFF;
+  --key-line:#CDD3E0;
+  --glow:rgba(200,122,22,.16);
+  --mono-bg:#E9ECF3;
+  --shadow:0 1px 2px rgba(25,28,36,.06), 0 8px 24px rgba(25,28,36,.06);
+  /* 本体の絞り込みバッジと同じ色。モックは実物に合わせる（2026-09-02 おじさん指示） */
+  --tagEmotes:#6b7484; --tagProps:#a86c16; --tagDances:#6f4fc4;
+  --tagWalks:#2f6fe0;  --tagMoods:#c0454a; --tagShared:#1f8f5e;
+  --accentBtn:#2f6fe0;   /* 本体の「書き出す」と同じ青 */
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#13161D;
+    --surface:#1C202A;
+    --surface-2:#242936;
+    --ink:#E9ECF4;
+    --ink-2:#98A0B4;
+    --line:#2E3441;
+    --amber:#E8A33D;
+    --amber-soft:#3A2E1A;
+    --key:#232936;
+    --key-line:#38404F;
+    --glow:rgba(232,163,61,.22);
+    --mono-bg:#181C25;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    --tagEmotes:#4a5364; --tagProps:#a56a15; --tagDances:#7c5cd6;
+    --tagWalks:#3576d6;  --tagMoods:#c9484d; --tagShared:#2a9c68;
+    --accentBtn:#4c8dff;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#13161D;
+  --surface:#1C202A;
+  --surface-2:#242936;
+  --ink:#E9ECF4;
+  --ink-2:#98A0B4;
+  --line:#2E3441;
+  --amber:#E8A33D;
+  --amber-soft:#3A2E1A;
+  --key:#232936;
+  --key-line:#38404F;
+  --glow:rgba(232,163,61,.22);
+  --mono-bg:#181C25;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  --tagEmotes:#4a5364; --tagProps:#a56a15; --tagDances:#7c5cd6;
+  --tagWalks:#3576d6;  --tagMoods:#c9484d; --tagShared:#2a9c68;
+  --accentBtn:#4c8dff;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN",system-ui,sans-serif;
+  font-size:17px; line-height:1.85; letter-spacing:.01em;
+}
+.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+:focus-visible{outline:2px solid var(--amber); outline-offset:3px; border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important}}
+
+.wrap{width:min(100% - 2.5rem, 62rem); margin-inline:auto}
+/* 幅を絞らず、囲みの幅いっぱいまで使う（2026-09-02 おじさん指示） */
+.prose{width:100%}
+section{padding-block:clamp(1.9rem,4.2vw,3.2rem)}
+/* 見出しの下に罫線を入れたので、節の境界線は二重になる。余白だけで切る（2026-09-02） */
+
+/* Dela Gothic One は極太のディスプレイ書体で、日本語の長い見出しだと画数が潰れる。
+   本文と同じ書体の太字にした（2026-09-02 おじさん指摘） */
+h1,h2,h3{font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN",system-ui,sans-serif;
+         font-weight:700; text-wrap:balance; line-height:1.4; letter-spacing:.01em}
+/* 商品名は Dela Gothic One のまま。短くて大きいので潰れず、個性が出る。
+   潰れて読みにくかったのは長い日本語の h2/h3 の方だった（2026-09-02） */
+h1{font-family:"Dela Gothic One","Zen Kaku Gothic New",sans-serif; font-weight:400;
+   font-size:clamp(2.1rem,6vw,3.4rem); letter-spacing:0; margin:0}
+/* 見出しと本文が密着していたので、薄い罫線と余白で切る（2026-09-02 おじさん指示） */
+h2{font-size:clamp(1.4rem,3.2vw,1.9rem); margin:0 0 .9em;
+   padding-bottom:.4em; border-bottom:1px solid var(--line)}
+h3{font-size:1.05rem; margin:0 0 .35em}
+p{margin:0 0 1.1em}
+p:last-child{margin-bottom:0}
+.lede{font-size:clamp(1.05rem,2.2vw,1.25rem); color:var(--ink-2); line-height:1.8}
+.eyebrow{font-size:.75rem; letter-spacing:.18em; text-transform:uppercase;
+         color:var(--amber); font-weight:700; margin:0 0 .9rem}
+.note{color:var(--ink-2); font-size:.92rem}
+strong{font-weight:700}
+a{color:var(--amber); text-underline-offset:3px}
+
+/* ── hero ─────────────────────────────────────────────── */
+.hero{padding-block:clamp(2.4rem,5.5vw,4rem)}
+.hero-grid{display:grid; gap:clamp(2.5rem,5vw,4rem); align-items:center}
+@media (min-width:60rem){.hero-grid{grid-template-columns:1fr 1fr}}
+.hero h1 span{display:block; color:var(--amber)}
+.hero .lede{margin-top:1.4rem}
+
+/* ── the deck ─────────────────────────────────────────── */
+.deck{
+  background:var(--surface); border:1px solid var(--line); border-radius:14px;
+  padding:1rem; box-shadow:var(--shadow);
+}
+.deck-keys{display:grid; grid-template-columns:repeat(5,1fr); gap:.5rem}
+.key{
+  aspect-ratio:1; border:1px solid var(--key-line); border-radius:9px;
+  background:var(--key); color:var(--ink); cursor:pointer; padding:.3rem;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:.15rem; font:inherit; font-size:.68rem; line-height:1.25; text-align:center;
+  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.key:hover,.key:focus-visible{transform:translateY(-2px);
+  border-color:var(--amber); box-shadow:0 0 0 3px var(--glow)}
+.key[aria-pressed="true"]{border-color:var(--amber); box-shadow:0 0 0 3px var(--glow)}
+.key .kc{font-size:.55rem; color:var(--ink-2); font-family:"JetBrains Mono",monospace}
+.key.blank{background:transparent; border-style:dashed; cursor:default; opacity:.45}
+.key.blank:hover{transform:none; box-shadow:none; border-color:var(--key-line)}
+.key.folder{background:var(--amber-soft)}
+.readout{
+  margin-top:.85rem; background:var(--mono-bg); border-radius:9px;
+  padding:.7rem .85rem; font-size:.85rem; min-height:3.4rem;
+  display:flex; flex-direction:column; justify-content:center; gap:.15rem;
+}
+.readout .r1{color:var(--ink-2); font-size:.72rem}
+.readout .r2{font-family:"JetBrains Mono",monospace; font-size:.95rem; word-break:break-all}
+
+/* ── steps ────────────────────────────────────────────── */
+.steps{display:grid; gap:2rem; counter-reset:s}
+.step{display:grid; gap:.9rem 1.4rem; grid-template-columns:auto 1fr; align-items:start}
+.step::before{
+  counter-increment:s; content:counter(s);
+  font-family:"Zen Kaku Gothic New",sans-serif; font-weight:700; font-size:1.1rem;
+  width:2.4rem; height:2.4rem; border-radius:50%;
+  background:var(--amber-soft); color:var(--amber);
+  display:grid; place-items:center; line-height:1;
+}
+.step-body{min-width:0}
+.step-body > *:first-child{margin-top:.35rem}
+
+/* small faithful mock-ups of the real screen */
+.mock{
+  background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  padding:.8rem; margin:.9rem 0 0; font-size:.8rem; overflow-x:auto;
+}
+.mock-row{display:flex; gap:.45rem; align-items:center; flex-wrap:wrap}
+.mock-row + .mock-row{margin-top:.5rem}
+/* 実物と同じ: 等幅3列、チェック→色バッジ→件数（件数は右端） */
+.chkgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:.3rem}
+.chk{display:flex; gap:.3rem; align-items:center; border:1px solid var(--line);
+     border-radius:12px; padding:.18rem .3rem; white-space:nowrap; min-width:0}
+.chk i{width:.75rem; height:.75rem; border:1px solid var(--key-line); border-radius:3px;
+       display:inline-block; background:var(--bg); flex:none}
+.chk .n{margin-left:auto; padding-right:.2rem; color:var(--ink-2)}
+.chk.on{border-color:var(--amber)}
+.chk.on i{background:var(--amber); border-color:var(--amber)}
+.chk.on .n{color:var(--amber)}
+.field{border:1px solid var(--line); border-radius:6px; padding:.35rem .6rem;
+       color:var(--ink-2); background:var(--bg); flex:1; min-width:12rem}
+.btn{border:1px solid var(--line); border-radius:6px; padding:.28rem .7rem;
+     background:var(--surface-2); white-space:nowrap}
+/* 実物の「書き出す」は琥珀ではなく青。モックは実物に合わせる（2026-09-02） */
+.btn.primary{background:var(--accentBtn); border-color:var(--accentBtn); color:#fff}
+/* 実物の一覧と同じ: 一行ずつ独立したブロック。[チェック][名前 …… バッジ] の下にコマンド。
+   名前が伸びるのでバッジは右端に寄る。 */
+.row-emote{display:flex; align-items:center; gap:.5rem; padding:.3rem .45rem;
+           border-radius:6px; background:var(--surface-2); margin-bottom:.25rem}
+.row-emote .cb{width:.8rem; height:.8rem; flex:none; border-radius:3px;
+               border:1px solid var(--key-line); background:var(--bg); display:inline-block}
+.row-emote .rb{flex:1; min-width:0}
+.row-emote .r1{display:flex; align-items:center; gap:.4rem}
+.row-emote .nm{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.row-emote .r2{font-size:.72rem; margin-top:.05rem}
+.animalrow{display:inline-flex; gap:.35rem; align-items:center; font-size:.75rem}
+.tag{font-size:.62rem; line-height:1.5; border-radius:4px; padding:0 .3rem;
+     white-space:nowrap; color:#fff; font-weight:700;
+     display:inline-block; min-width:6.4em; text-align:center; flex:none}
+.tag.g-emotes{background:var(--tagEmotes)}
+.tag.g-props {background:var(--tagProps)}
+.tag.g-dances{background:var(--tagDances)}
+.tag.g-walks {background:var(--tagWalks)}
+.tag.g-moods {background:var(--tagMoods)}
+.tag.g-shared{background:var(--tagShared)}
+
+/* ── tables ───────────────────────────────────────────── */
+.tablewrap{overflow-x:auto; margin:1.2rem 0 0}
+table{border-collapse:collapse; width:100%; font-size:.92rem; min-width:32rem}
+th,td{text-align:left; padding:.6rem .8rem; border-bottom:1px solid var(--line);
+      vertical-align:top}
+th{font-weight:700; font-size:.78rem; letter-spacing:.06em; color:var(--ink-2);
+   text-transform:uppercase}
+/* th にも効かせないと、最終行の見出し列だけ短い線が残る（2026-09-02 おじさん指摘） */
+tbody tr:last-child th,
+tbody tr:last-child td{border-bottom:0}
+
+/* ── callouts ─────────────────────────────────────────── */
+.cards{display:grid; gap:1rem; margin-top:1.4rem}
+@media (min-width:48rem){.cards{grid-template-columns:repeat(3,1fr)}}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:12px;
+      padding:1.1rem 1.2rem}
+.card h3{color:var(--amber)}
+.card p{font-size:.92rem; color:var(--ink-2); margin:0}
+
+.cmd{font-family:"JetBrains Mono",monospace; background:var(--mono-bg);
+     border-radius:5px; padding:.08em .4em; font-size:.9em}
+
+footer{padding-block:3rem 4rem; color:var(--ink-2); font-size:.87rem}
+footer p{margin:0 0 .5em}
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <div class="hero-grid">
+    <div>
+      <p class="eyebrow">FiveM × Stream Deck</p>
+      <h1>FiveM<span>エモート太郎</span></h1>
+      <p class="lede">
+        <strong>エモート専用のプロファイルを作りましょう。</strong>
+      </p>
+      <p class="note">
+        Stream Deck の各機種に合わせた配列に、自分の好きなエモートを事前登録。
+        出力したファイルでそのまま実装できます。
+      </p>
+    </div>
+
+    <div>
+      <div class="deck" role="group" aria-label="ボタンの並びの例">
+        <div class="deck-keys" id="keys"></div>
+        <div class="readout" id="readout" aria-live="polite">
+          <span class="r1">ボタンを押すと、送られる文字が出ます</span>
+          <span class="r2 mono">&nbsp;</span>
+        </div>
+      </div>
+      <p class="note" style="margin-top:.7rem; font-size:.8rem">
+        ↑ 作ったものが Stream Deck にこう並びます。押すと、そのボタンが送るコマンドが出ます。
+      </p>
+    </div>
+  </div>
+</header>
+
+<section class="wrap">
+  <div class="prose">
+    <h2>調べて、控えて、打ち込む</h2>
+    <p>
+      あの人が使っているエモート。街で見かけたエモート。配信で見かけたエモート。
+      自分も使おうと思って設定する時、綴りとか忘れちゃいますよね？スペルミスすると動作もしません。配信中に設定する訳にもいきません。
+    </p>
+    <p>
+      FiveMエモート太郎は事前にあなたのエモートのプロファイルを作成できます。
+      お使いの機種に応じて好きな数だけ設定可能です。フォルダ分けにも対応。手順もとっても簡単です。
+    </p>
+    <p>
+      気になるエモートコマンドは事前に控えておきましょう。
+    </p>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>種類で絞る</h3>
+      <p>動作・小道具・ダンス・歩き方・表情・2人でやる。用途に合わせて絞り込めます。</p>
+    </div>
+    <div class="card">
+      <h3>まとめて置く</h3>
+      <p>チェックを付けて「選択分を一括配置」。入り切らない分は自動でページが分かれます。</p>
+    </div>
+    <div class="card">
+      <h3>綴りは確定済み</h3>
+      <p>選んだ時点でコマンドが決まります。チャット欄の呼び出しとエモートのコマンドを同時に登録。</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="prose">
+    <h2>物理ボタンでもバーチャルボタンでもOK</h2>
+    <p>
+      書き出し先は物理ボタンだけではありません。<strong>スマホアプリ（Stream Deck Mobile）や、
+      PC上に表示させるタイプ（Virtual Stream Deck）にも</strong>そのまま入ります。
+      <strong>実機を持っていなくても、アプリを準備すれば今日から使えます。</strong>
+    </p>
+    <p>
+      <strong>並べた内容は機種に縛られません。</strong>実機で組んだものをそのままスマホアプリへ、
+      スマホアプリで組んだものを実機へ。キーの数が違っても、
+      <strong>ページの分かれ方が計算し直されるだけで、中身はそのまま残ります。</strong>
+      作り直す必要はありません。
+    </p>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2 style="margin-bottom:2.4rem">登録方法</h2>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-body">
+        <h3>設定する機種を選ぶ</h3>
+        <p class="prose">
+          画面のいちばん上、左端です。実機・スマホアプリ・PC上に表示させるタイプ、どれでも構いません。
+          <strong>キー数を自分で決める機種</strong>（スマホアプリなど）を選ぶと、
+          そのとなりに縦横を入れる欄が出ます。
+        </p>
+        <div class="mock">
+          <div class="mock-row">
+            <span class="note">お使いの機種</span>
+            <span class="field">Stream Deck / MK.2 — 15キー (5×3)</span>
+            <span class="note">5×3 = 15キー</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-body">
+        <h3>エモートを探す</h3>
+        <p class="prose">
+          先に<strong>種類にチェック</strong>を入れ、あとは<strong>綴りを</strong>打ちます。
+          <span class="cmd">/e</span> などのコマンドを打つ必要はありません。対象のエモートに必要なコマンドが同時に設定されます。
+          何もチェックしなければ全部が対象です。
+        </p>
+        <div class="mock">
+          <div class="chkgrid">
+            <span class="chk"><i></i><span class="tag g-emotes">動　作</span><span class="n">680</span></span>
+            <span class="chk"><i></i><span class="tag g-props">小道具</span><span class="n">648</span></span>
+            <span class="chk"><i></i><span class="tag g-dances">ダンス</span><span class="n">136</span></span>
+            <span class="chk"><i></i><span class="tag g-walks">歩き方</span><span class="n">139</span></span>
+            <span class="chk"><i></i><span class="tag g-moods">表　情</span><span class="n">38</span></span>
+            <span class="chk"><i></i><span class="tag g-shared">2人でやる</span><span class="n">94</span></span>
+          </div>
+          <div class="mock-row"><span class="field">hug</span></div>
+          <div class="mock-row">
+            <span class="note">11 件表示 / 選択 0</span>
+            <span class="btn">A→Z</span>
+            <span class="btn" style="margin-left:auto">選択分を一括配置</span>
+          </div>
+          <div class="mock-row">
+            <span class="note animalrow"><i class="cb"></i>動物用だけ表示</span>
+          </div>
+          <div class="mock-row" style="display:block; margin-top:.7rem">
+            <div class="row-emote">
+              <i class="cb"></i>
+              <div class="rb">
+                <div class="r1"><span class="nm">Hug</span><span class="tag g-shared">2人でやる</span></div>
+                <div class="r2 mono note">/nearby hug</div>
+              </div>
+            </div>
+            <div class="row-emote">
+              <i class="cb"></i>
+              <div class="rb">
+                <div class="r1"><span class="nm">Hug 2</span><span class="tag g-shared">2人でやる</span></div>
+                <div class="r2 mono note">/nearby hug2</div>
+              </div>
+            </div>
+            <div class="row-emote">
+              <i class="cb"></i>
+              <div class="rb">
+                <div class="r1"><span class="nm">Hug Dog</span><span class="tag g-emotes">動　作</span></div>
+                <div class="r2 mono note">/e k9pose</div>
+              </div>
+            </div>
+            <div class="row-emote">
+              <i class="cb"></i>
+              <div class="rb">
+                <div class="r1"><span class="nm">Hug Me</span><span class="tag g-emotes">動　作</span></div>
+                <div class="r2 mono note">/e hugme</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="note prose" style="margin-top:.8rem">
+          ゲーム画面のコマンドを、そのまま貼り付けても引けます。
+          一覧にないオリジナルのエモートもその綴りのまま登録ができます。選択肢になくてもご安心ください。
+          歩き方や表情のコマンドが画面に出ない街では、ゲーム内で <span class="cmd">/walks</span>
+          <span class="cmd">/moods</span> と打つと一覧がチャットに出ます。
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-body">
+        <h3>ボタンを配置する</h3>
+        <p class="prose">
+          対象エモートをクリックをすると空いている所に入ります。位置を決めたいときはドラッグ。
+          ボタンをダブルクリックすると名前を変えられます。複数のチェックボックスを入れて一括で流し込むことも可能です。
+        </p>
+        <div class="tablewrap">
+          <table>
+            <tbody>
+              <tr><th>入れる</th><td>左の一覧をクリック／ドラッグ</td></tr>
+              <tr><th>まとめる</th><td>「フォルダを追加」。中に入れれば階層になります</td></tr>
+              <tr><th>入り切らない分</th><td><strong>自動で「つづき →」が付き</strong>、次のページに続きます</td></tr>
+              <tr><th>戻る</th><td>2ページ目以降には「← 戻る」が自動で入ります</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-body">
+        <h3>書き出して、ダブルクリック</h3>
+        <p class="prose">
+          右上の「書き出す」を押すと、ファイルがダウンロードされます。
+          そのファイルを<strong>ダブルクリックするだけ</strong>で Stream Deck に入ります。
+        </p>
+        <div class="mock">
+          <div class="mock-row">
+            <span class="btn">読み込む</span>
+            <span class="btn">全消去</span>
+            <span class="btn primary">書き出す（.streamDeckProfile）</span>
+          </div>
+        </div>
+        <p class="note prose" style="margin-top:.8rem">
+          このファイルが作業データそのものです。別にバックアップを取る必要はありません。
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-body">
+        <h3>行き来するボタンを付ける</h3>
+        <p class="prose">
+          登録しただけでは、<strong>すでに設定している元のプロファイルと行き来できません。</strong>
+          Stream Deck アプリで空きボタンを2つ使い、
+          <strong>「プロファイル切り替え」</strong>を往復ぶん置いてください。
+        </p>
+        <div class="tablewrap">
+          <table>
+            <tbody>
+              <tr><th>行き</th><td>エモート用プロファイルへ行くボタンを設置</td></tr>
+              <tr><th>戻り</th><td>元のプロファイルへ戻るボタンを設置</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="prose" style="margin-top:1.1rem">
+          この設定は<strong>1回だけ</strong>です。エモート太郎で読み込み直しても、
+          このボタンはそのまま残ります。
+        </p>
+        <p class="note prose">
+          ※ 行き先はパソコンごとに決まる番号で指定するため、本ツールでは作れません。
+          設定ボタンは Stream Deck アプリにてご確認ください。
+        </p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="prose">
+    <h2>こちらを予めご了承ください。</h2>
+  </div>
+  <div class="cards">
+    <div class="card">
+      <h3>プロファイルは入れ直すと増えます</h3>
+      <p>取り込みは上書きではありません。同じものを2回入れると「◯◯ コピー」ができます。
+         古い方はアプリの一覧から消してください。</p>
+    </div>
+    <div class="card">
+      <h3>動物用は別枠です</h3>
+      <p>犬や猫のときだけ動くエモートが登録されています。人間のキャラでは1件も動かないので、
+         チェックで切り替える形にしています。</p>
+    </div>
+    <div class="card">
+      <h3>再読み込みで編集できます。</h3>
+      <p>編集したいプロファイルは、書き出したファイルを「読み込む」に渡してください。
+         エモート以外のキーが入ったプロファイルは、受け付けません。</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="prose">
+    <h2>もうひとつこちらもご了承ください。</h2>
+    <p>
+      本ツールのデータは
+      <a href="https://github.com/alberttheprince/rpemotes-reborn" target="_blank" rel="noopener">rpemotes-reborn</a>
+      ／
+      <a href="https://github.com/andristum/dpemotes" target="_blank" rel="noopener">dpemotes</a>
+      （ともに GPL-3.0）に登録されているエモート一覧を反映しています。
+    </p>
+    <p>
+      FiveM で制作されている街によって入っているエモート、入ってないエモートが存在します。
+      またエモート自体は登録されていても動作をしない場合もありえます。
+    </p>
+    <p>ですので、設定して動かない場合もあるのでご容赦ください。</p>
+    <p>
+      なお、本ツールのリストにはないエモートコマンドは検索時に該当がなければ直接登録して設定が可能です。
+    </p>
+    <p>
+      本ツール内ではボタンへの画像設定は行えません。詳細の調整は Stream Deck アプリ内で行ってください。
+    </p>
+    <p class="note">
+      FiveMエモート太郎は <strong>GPL-3.0</strong> で公開しているフリーソフトウェアです（無保証）。
+      収録しているのは名前とチャットコマンドの文字列のみで、アニメーションやプロップの実体は含みません。
+      自作データとは称しません。
+    </p>
+  </div>
+</section>
+
+
+<script>
+/* The hero deck. Real emote names and real commands -- the same strings the
+   tool writes into a profile -- so pressing a key here shows exactly what the
+   key would send in game. */
+const KEYS = [
+  { t:'Dance',    c:'/e dance' },
+  { t:'Wave',     c:'/e wave' },
+  { t:'Sit',      c:'/e sit' },
+  { t:'Cheer',    c:'/e cheer' },
+  { t:'Hug',      c:'/nearby hug', pair:true },
+  { t:'Facepalm', c:'/e facepalm' },
+  { t:'Salute',   c:'/e salute' },
+  { t:'Think',    c:'/e think' },
+  { t:'Alien',    c:'/walk Alien' },
+  { t:'Angry',    c:'/mood Angry' },
+  { t:'ダンス',    folder:true },
+  null, null, null, null,
+];
+
+const box = document.getElementById('keys');
+const r1 = document.querySelector('#readout .r1');
+const r2 = document.querySelector('#readout .r2');
+
+KEYS.forEach(k => {
+  if (!k){
+    const d = document.createElement('div');
+    d.className = 'key blank';
+    box.appendChild(d);
+    return;
+  }
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'key' + (k.folder ? ' folder' : '');
+  b.setAttribute('aria-pressed', 'false');
+  /* 実機のキーに出るのはラベルだけ。コマンドは中身であって面には出ないので、
+     ここでも出さない（押したときに下の欄へ出る）。2026-09-02 おじさん指摘 */
+  b.innerHTML = '<span>' + k.t + '</span>';
+  b.onclick = () => {
+    box.querySelectorAll('.key').forEach(x => x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+    if (k.folder){
+      r1.textContent = 'フォルダ';
+      r2.textContent = '押すと下層にフォルダ展開します';
+      return;
+    }
+    r1.textContent = k.pair ? 'チャットに送られます（相手が必要です）' : 'チャットに送られます';
+    r2.textContent = k.c;
+  };
+  box.appendChild(b);
+});
+</script>
+</body>
+</html>
