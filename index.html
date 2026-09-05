@@ -959,6 +959,8 @@ const backKey = () => '0,0';
 /* ---- layer 2 access ---- */
 const newFolder = title => ({ kind:'folder', title, items:[] });
 const newCmd = (cmd, title) => ({ kind:'cmd', cmd, title });
+/* 意図して空けたキー。1つぶんの場所を取るが、書き出しでは何も出ない。 */
+const newGap = () => ({ kind:'gap' });
 
 /* A path is an array of indices from the root: [] is the root folder,
    [2] is the folder at root index 2, [2,0] its first child folder. */
@@ -1021,6 +1023,8 @@ function materialize(){
         slots[keys[s]] =
             it.kind === 'cmd'    ? { type:'emote',  cmd:it.cmd, title:it.title, img:it.img, ref }
           : it.kind === 'switch' ? { type:'switch', title:it.title, raw:it.raw, ref }
+          // 場所は取るが中身は無い。落とし先として ref だけ持たせる
+          : it.kind === 'gap'    ? { type:'gap', ref }
           : { type:'folder', title:it.title, img:it.img, page:'p:' + path.concat(i).join('.'), ref };
       }
 
@@ -1046,21 +1050,58 @@ function materialize(){
 let M = null;                       // current layer-3 result
 function remat(){ M = materialize(); }
 
-/* ---- editing, all of it against layer 2 ---- */
-function addToFolder(path, node){ folderAt(path).items.push(node); }
+/* ---- editing, all of it against layer 2 ----
 
-function insertAt(path, index, node){
+   置いたボタンは、置いた場所に留まる。Stream Deck のアプリ自体がキーを詰めない
+   ので、こちらだけ詰めると「動かしたつもりの場所と違う所に出る」ことになる
+   （2026-09-05 おじさん指摘）。
+   空き枠は kind:'gap' として items に実在させる。キーを1つ占めるが、
+   画面では空に見え、書き出しでは行そのものが出ない＝空のキーになる。
+   末尾の gap だけは捨てる。残すと、中身が無いのに次ページが生えてしまう。 */
+function trimGaps(path){
   const items = folderAt(path).items;
-  items.splice(Math.max(0, Math.min(index, items.length)), 0, node);
+  while (items.length && items[items.length - 1].kind === 'gap') items.pop();
+}
+
+/* 空き枠があればそこを埋める。無ければ末尾に足す。
+   「選んだ ◯ 件を入れる」が空いている所へ入る、と説明しているのはこの動き。 */
+function addToFolder(path, node){
+  const items = folderAt(path).items;
+  const g = items.findIndex(x => x.kind === 'gap');
+  if (g >= 0) items[g] = node; else items.push(node);
+}
+
+/* 落とした場所ちょうどに置く。手前が空いていれば、そのぶん空き枠で埋める。 */
+function placeAt(path, index, node){
+  const items = folderAt(path).items;
+  const at = Math.max(0, index);
+  while (items.length < at) items.push(newGap());
+  if (items[at] && items[at].kind === 'gap') items[at] = node;
+  else items.splice(Math.min(at, items.length), 0, node);
 }
 
 function removeAt(path, index){ return folderAt(path).items.splice(index, 1)[0]; }
 
+/* 消したキーの場所は空き枠として残す。ここで詰めると、
+   隣に並べたボタンが1つずつずれていく。 */
+function clearAt(path, index){
+  const items = folderAt(path).items;
+  if (index < 0 || index >= items.length) return null;
+  const node = items[index];
+  items[index] = newGap();
+  trimGaps(path);
+  return node;
+}
+
 function moveItem(fromPath, fromIndex, toPath, toIndex){
-  const node = removeAt(fromPath, fromIndex);
-  // removing from the same folder before the target shifts it left by one
-  if (fromPath.join('.') === toPath.join('.') && fromIndex < toIndex) toIndex--;
-  insertAt(toPath, toIndex, node);
+  const from = folderAt(fromPath).items;
+  const node = from[fromIndex];
+  if (!node) return;
+  // 元の場所は空き枠にして空ける。抜き取って詰めると、後ろが全部ずれる
+  from[fromIndex] = newGap();
+  placeAt(toPath, toIndex, node);
+  trimGaps(fromPath);
+  if (toPath.join('.') !== fromPath.join('.')) trimGaps(toPath);
 }
 
 /* Deck changes never lose anything now -- layer 2 is untouched. */
@@ -1505,7 +1546,8 @@ function renderGrid(){
       d.title = 'この機種に入りきらない分。自動で作られます';
       d.onclick = () => { curChain++; renderGrid(); };
       d.style.cursor = 'pointer';
-    } else if (s){
+    // gap は「意図して空けたキー」。何も描かず、落とし先としてだけ働く
+    } else if (s && s.type !== 'gap'){
       d.classList.add('filled', s.type === 'emote' ? 'emote' : 'folder');
       d.draggable = true;
       const t = document.createElement('div');
@@ -1529,7 +1571,7 @@ function renderGrid(){
           const n = countCommands(node);
           if (n && !(await askConfirm(`「${s.title}」の中身 ${n} 個ごと消します。`))) return;
         }
-        removeAt(s.ref.path, s.ref.index);
+        clearAt(s.ref.path, s.ref.index);
         renderGrid(); save();
       };
       d.appendChild(x);
@@ -1556,9 +1598,12 @@ function renderGrid(){
 
     // where would a drop land in the logical order? Count the content slots
     // before this one on this page, and add the folder's page offset.
+    /* 「← 戻る」と「つづき →」は中身ではないので数から外す。
+       ここで既に外しているのに、さらに1つ引いている箇所があり、
+       戻るキーのあるページでは1つ手前に入っていた（2026-09-05 実測で判明）。
+       空きを詰めていた頃は末尾に寄るので見えなかった。 */
     const contentBefore = slotKeys().slice(0, slotIdx)
       .filter(kk => { const t = page.slots[kk]; return !t || (t.type !== 'back' && t.type !== 'next'); }).length;
-    const pageOffset = page.slots[backKey()] && page.slots[backKey()].type === 'back' ? -1 : 0;
     const firstIndexOnPage = (() => {
       for (const kk of slotKeys()){
         const t = page.slots[kk];
@@ -1566,7 +1611,7 @@ function renderGrid(){
       }
       return folderAt(curPath).items.length;
     })();
-    const dropIndex = firstIndexOnPage + contentBefore + pageOffset;
+    const dropIndex = firstIndexOnPage + contentBefore;
 
     d.ondragover = e => { if (reserved) return; e.preventDefault(); d.classList.add('drop'); };
     d.ondragleave = () => d.classList.remove('drop');
@@ -1575,7 +1620,7 @@ function renderGrid(){
       if (reserved || !dragPayload) return;
       if (dragPayload.kind === 'emote'){
         const it = dragPayload.emote;
-        insertAt(curPath, dropIndex, newCmd(it.command, it.display));
+        placeAt(curPath, dropIndex, newCmd(it.command, it.display));
       } else {
         moveItem(dragPayload.ref.path, dragPayload.ref.index, curPath, dropIndex);
       }
@@ -1652,7 +1697,9 @@ function renderDials(){
 
 function renderStats(){
   const pages = Object.keys(M.pages).length;
-  const here = folderAt(curPath).items.length;
+  // 空き枠は場所を取るだけで中身ではない。数に入れると
+  // 「このフォルダ 5 / 全体 2」のような食い違いが出る
+  const here = folderAt(curPath).items.filter(i => i.kind !== 'gap').length;
   const total = countEmotes();
   $('#stats').innerHTML = `
     <div class="stat"><span>このフォルダ</span><b>${here} 個</b></div>
@@ -1896,6 +1943,8 @@ function buildProfile(){
     const actions = {};
     const images = [];   // {name, b64} to drop into this page's Images/
     for (const [k, s] of Object.entries(page.slots)){
+      // 意図して空けたキー。行そのものを出さないのが「空のキー」の書き方
+      if (s.type === 'gap')         continue;
       if (s.type === 'back')        actions[k] = actBack();
       else if (s.type === 'emote')  actions[k] = actCommand(s.cmd, s.title);
       // written back exactly as it was read, target profile and all
@@ -2468,18 +2517,35 @@ function profileToState(files){
     return ar - br || ac - bc;
   });
 
+  /* 空けたキーは、ファイルの中では「その行が無い」という形でしか残らない。
+     行のある所だけを歩くと空きが消え、読み戻すたびにボタンが左へ詰まる。
+     そこで先に全ページを見てグリッドの大きさを出し、行の無い位置も歩く。 */
+  for (const p of Object.values(pages)){
+    for (const k of Object.keys(slotsOf(p))){
+      const [c, r] = k.split(',').map(Number);
+      if (c > maxCol) maxCol = c;
+      if (r > maxRow) maxRow = r;
+    }
+  }
+  const gridKeys = () => {
+    const out = [];
+    for (let r = 0; r <= maxRow; r++)
+      for (let c = 0; c <= maxCol; c++) out.push(`${c},${r}`);
+    return out;
+  };
+
   const walkPage = guid => {
     const page = pages[guid];
     const items = [];
     if (!page || seen.has(guid)) return items;
     seen.add(guid);
     const slots = slotsOf(page);
-    for (const k of ordered(slots)){
-      const [c, r] = k.split(',').map(Number);
-      if (c > maxCol) maxCol = c;
-      if (r > maxRow) maxRow = r;
+    for (const k of gridKeys()){
       const a = slots[k];
-      if (!a || a.UUID === 'com.elgato.streamdeck.profile.backtoparent') continue;
+      // 行が無い＝そのキーは空。空けたまま持ち帰る
+      if (!a){ items.push(newGap()); continue; }
+      // 「← 戻る」は組み立て直すときに自動で付くので、持ち帰らない
+      if (a.UUID === 'com.elgato.streamdeck.profile.backtoparent') continue;
 
       const st0 = (a.States || [])[0] || {};
 
@@ -2519,13 +2585,23 @@ function profileToState(files){
         const im = imgOf(guid, st0); if (im) node.img = im;
         items.push(node);
       } else {
+        // 読めない種類でも場所は空けておく。詰めると並びがずれる
         unsupported++;
+        items.push(newGap());
       }
     }
     return items;
   };
 
   const layout = { title:'ルート', items: roots.reduce((all, g) => all.concat(walkPage(g)), []) };
+
+  /* 末尾の空きは捨てる。残すと中身が無いのに次ページが生えるうえ、
+     複数の最上位ページを続けて読むとき、前のページの余白ぶんだけ
+     次のページの中身が後ろへずれる。 */
+  (function dropTrailingGaps(node){
+    while (node.items.length && node.items[node.items.length - 1].kind === 'gap') node.items.pop();
+    node.items.forEach(x => { if (x.kind === 'folder') dropTrailingGaps(x); });
+  })(layout);
 
   // dials, if the profile carries an Encoder controller
   const dials = [];
