@@ -113,10 +113,15 @@
   }
   .chip.on{background:var(--accent); border-color:var(--accent); color:#fff}
   .elist{display:flex; flex-direction:column; gap:3px}
+  /* クリック＝選ぶ、だけ。以前は行のどこを押しても即デッキに入っていて、
+     13px のチェックボックスを数ピクセル外すと「選んだつもりが入っていた」。
+     同じ場所に2つの操作を重ねない（2026-09-05 おじさん指示）。 */
   .eitem{
     display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:6px;
-    background:var(--panel2); border:1px solid transparent; cursor:grab;
+    background:var(--panel2); border:1px solid transparent; cursor:pointer;
   }
+  /* 印であって、押す的ではない。行のどこでも同じ結果になる。 */
+  .eitem input[type=checkbox]{pointer-events:none}
   .eitem:hover{border-color:var(--accent)}
   .eitem.picked{outline:1px solid var(--good)}
   .eitem .ebody{flex:1; min-width:0}
@@ -317,8 +322,8 @@
             <option value="za">Z→A</option>
             <option value="smart">登録順</option>
           </select>
-          <button id="btnBulk" style="margin-left:auto; white-space:nowrap"
-                  title="チェックしたものを順に並べる。溢れたら自動でフォルダを作る">選択分を一括配置</button>
+          <button id="btnBulk" style="margin-left:auto; white-space:nowrap" disabled
+                  title="選んだものを順に並べます。1つでも構いません。溢れたら自動でフォルダを作ります">選んでから押します</button>
         </div>
         <!-- There was a 「成人向けも表示」 box beside this one. The 30 emotes it
              revealed are no longer in the page at all -- they are dropped when
@@ -347,8 +352,8 @@
                something to read every time, and wrapping it pushes the grid down -->
           <span class="dim" style="margin-left:auto; white-space:nowrap; overflow:hidden;
                 text-overflow:ellipsis; min-width:0"
-                title="エモートをクリック＝空きスロットへ／ドラッグ＝好きな位置へ／ボタンをダブルクリック＝ラベル変更">
-            クリック＝空きへ／ドラッグ＝位置指定／ダブルクリック＝ラベル変更</span>
+                title="左の一覧をクリックして選び、ボタンで空きスロットへ／好きな位置に置くならドラッグ／ボタンをダブルクリック＝ラベル変更">
+            選んでボタンで空きへ／ドラッグ＝位置指定／ダブルクリック＝ラベル変更</span>
         </div>
       </div>
       <div class="deckWrap">
@@ -1270,10 +1275,21 @@ function nameFromCommand(cmd){
   return m ? m[1] : String(cmd).replace(/^\//, '');
 }
 
+/* 表示件数・選択件数・入れるボタンは、常に同じ数を言う。
+   3か所で別々に書き換えていたのを1本にした。 */
+let shownCount = 0;
+function syncCounts(total){
+  if (total !== undefined) shownCount = total;
+  $('#listCount').textContent = `${shownCount} 件表示 / 選択 ${picked.size}`;
+  const b = $('#btnBulk');
+  b.disabled = picked.size === 0;
+  b.textContent = picked.size ? `選んだ ${picked.size} 件を入れる` : '選んでから押します';
+}
+
 function renderList(){
   const list = filtered();
   const el = $('#elist'); el.innerHTML = '';
-  $('#listCount').textContent = `${list.length} 件表示 / 選択 ${picked.size}`;
+  syncCounts(list.length);
 
   const frag = document.createDocumentFragment();
   list.slice(0, 1200).forEach(it => {
@@ -1282,13 +1298,7 @@ function renderList(){
     d.draggable = true;
 
     const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.checked = picked.has(it.command);
-    cb.onclick = e => {
-      e.stopPropagation();
-      cb.checked ? picked.add(it.command) : picked.delete(it.command);
-      d.classList.toggle('picked', cb.checked);
-      $('#listCount').textContent = `${list.length} 件表示 / 選択 ${picked.size}`;
-    };
+    cb.type = 'checkbox'; cb.checked = picked.has(it.command); cb.tabIndex = -1;
 
     // line 1: label + hint tags + command
     const head = document.createElement('div');
@@ -1352,15 +1362,20 @@ function renderList(){
        dictionary are GTA's internal identifiers -- true, and unreadable. Hiding
        that under a hover was not making it any more useful than a badge was.
        It is all still in data/emotes.json when a question needs it. */
-    d.title = `${it.display}\n${it.command}`;
+    d.title = `${it.display}\n${it.command}\n\nクリックで選ぶ／もう一度で外す\n好きなキーに直接置くならドラッグ`;
 
     const body = document.createElement('div');
     body.className = 'ebody';
     body.append(head, sub);
     d.append(cb, body);
+    /* 行のどこを押しても「選ぶ」。デッキには入らない。
+       入れるのは下のボタンか、ドラッグでキーに直接置くかの2つだけ。 */
     d.onclick = () => {
-      addToFolder(curPath, newCmd(it.command, it.display));
-      renderGrid(); save();
+      if (picked.has(it.command)) picked.delete(it.command);
+      else picked.add(it.command);
+      cb.checked = picked.has(it.command);
+      d.classList.toggle('picked', cb.checked);
+      syncCounts();
     };
     d.ondragstart = e => {
       dragPayload = { kind:'emote', emote:it };
@@ -1643,10 +1658,10 @@ function chainLength(path){
 function bulkPlace(){
   const src = sources[S.sourceId];
   const items = src.items.filter(i => picked.has(i.command));
-  if (!items.length){ toast('左のチェックボックスで選んでください'); return; }
+  if (!items.length){ toast('一覧をクリックして選んでください'); return; }
   items.forEach(i => addToFolder(curPath, newCmd(i.command, i.display)));
   picked.clear(); renderList(); renderGrid(); save();
-  toast(`${items.length} 個を追加しました`);
+  toast(`${items.length} 個を入れました`);
 }
 
 /* ---------------------------------------------------------------
