@@ -23,6 +23,17 @@ $mirror = 'D:\Dropbox\claude-work\fivem-emote-taro'
 
 function Say($text) { Write-Host $text }
 
+# PS 5.1 は native コマンドの stderr をリダイレクトすると ErrorRecord に包み、
+# 成功していても $ErrorActionPreference='Stop' で止まる。git は進捗を stderr に
+# 出すので push も pull も必ず踏む。2>&1 も 2>$null も同じ。
+# → リダイレクトせず、その場だけ Continue にして、成否は終了コードで見る。
+function Invoke-Git {
+    param([Parameter(ValueFromRemainingArguments = $true)]$GitArgs)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & git.exe -C $repo @GitArgs } finally { $ErrorActionPreference = $prev }
+}
+
 # ---- 1. 自分の変更を送る（-Push のときだけ） ----------------------------
 
 if ($Push) {
@@ -34,10 +45,7 @@ if ($Push) {
         git -C $repo commit -m $Message | Out-Null
     }
     Say 'GitHub へ送ります'
-    # 2>&1 は使わない。PS5.1 は native の stderr を ErrorRecord に包み、
-    # 成功していても $ErrorActionPreference='Stop' で止まる。git は進捗を
-    # stderr に出すので、必ず踏む。捨てるなら 2>$null。
-    git -C $repo push 2>$null
+    Invoke-Git push
     if ($LASTEXITCODE -ne 0) { throw "push に失敗しました（終了コード $LASTEXITCODE）" }
 }
 
@@ -51,7 +59,7 @@ if ($dirty -and -not $Push) {
 }
 
 Say 'GitHub から取得します'
-git -C $repo pull --ff-only 2>$null
+Invoke-Git pull --ff-only
 if ($LASTEXITCODE -ne 0) { throw "取得に失敗しました（終了コード $LASTEXITCODE）。手元とGitHubの両方が進んでいる可能性があります" }
 $commit = git -C $repo rev-parse --short HEAD
 Say "  いまの版: $commit  $(git -C $repo log -1 --format=%s)"
