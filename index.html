@@ -122,6 +122,12 @@
   }
   /* 印であって、押す的ではない。行のどこでも同じ結果になる。 */
   .eitem input[type=checkbox]{pointer-events:none}
+  /* 掴めることは、掴もうとした瞬間に分かるのが一番早い。常時は出さない。 */
+  .eitem .grip{
+    flex:none; opacity:0; color:var(--accent); cursor:grab;
+    font-size:13px; line-height:1; padding:0 1px; letter-spacing:-1px;
+  }
+  .eitem:hover .grip{opacity:.85}
   .eitem:hover{border-color:var(--accent)}
   .eitem.picked{outline:1px solid var(--good)}
   .eitem .ebody{flex:1; min-width:0}
@@ -333,6 +339,14 @@
                  title="犬・猫などの動物キャラのときだけ使える116件に切り替えます。人間のキャラでは1件も動きません">
             <input type="checkbox" id="showAnimal" style="margin:0"> 動物用だけ表示
           </label>
+          <!-- 行が増えないよう、動物用チェックと同じ段の右端に置く。
+               1つだけ入れたい人がボタンまで往復しないで済むのが要点
+               （2026-09-05 おじさん指示：ドラッグを強調する）。 -->
+          <span style="margin-left:auto; white-space:nowrap; overflow:hidden;
+                       text-overflow:ellipsis; min-width:0"
+                title="行をつかんで右のキーの上で放すと、その位置に入ります。選んでボタンを押す必要はありません">
+            1つだけなら <b style="color:var(--accent)">右のキーへドラッグ</b>
+          </span>
         </div>
       </div>
       <div class="paneBody"><div class="elist" id="elist"></div></div>
@@ -352,8 +366,8 @@
                something to read every time, and wrapping it pushes the grid down -->
           <span class="dim" style="margin-left:auto; white-space:nowrap; overflow:hidden;
                 text-overflow:ellipsis; min-width:0"
-                title="左の一覧をクリックして選び、ボタンで空きスロットへ／好きな位置に置くならドラッグ／ボタンをダブルクリック＝ラベル変更">
-            選んでボタンで空きへ／ドラッグ＝位置指定／ダブルクリック＝ラベル変更</span>
+                title="1つだけならドラッグでその位置へ／たくさん入れるときは左でクリックして選び、ボタンで空きスロットへ／ボタンをダブルクリック＝ラベル変更">
+            1つならドラッグ／たくさんなら選んでボタン／ダブルクリック＝ラベル変更</span>
         </div>
       </div>
       <div class="deckWrap">
@@ -1367,7 +1381,12 @@ function renderList(){
     const body = document.createElement('div');
     body.className = 'ebody';
     body.append(head, sub);
-    d.append(cb, body);
+
+    const grip = document.createElement('span');
+    grip.className = 'grip'; grip.textContent = '⠿';
+    grip.title = 'ここをつかんで、右のキーの上で放してください';
+
+    d.append(cb, body, grip);
     /* 行のどこを押しても「選ぶ」。デッキには入らない。
        入れるのは下のボタンか、ドラッグでキーに直接置くかの2つだけ。 */
     d.onclick = () => {
