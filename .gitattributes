@@ -1,0 +1,3 @@
+# シェルスクリプトは改行を LF に固定する。
+# Windows で取り出すと CRLF になり、Mac で実行できなくなるため。
+*.sh text eol=lf
